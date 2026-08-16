@@ -115,6 +115,23 @@ export class BookingsService {
       vehicleId = newVehicle.id;
     }
 
+    let validServiceId = dto.serviceId;
+    const serviceInDb = await this.prisma.service.findUnique({ where: { id: dto.serviceId } }).catch(() => null);
+    if (!serviceInDb) {
+      const firstService = await this.prisma.service.findFirst().catch(() => null);
+      if (firstService) {
+        validServiceId = firstService.id;
+      }
+    }
+
+    let validMechanicId = dto.mechanicId || null;
+    if (validMechanicId) {
+      const mechInDb = await this.prisma.mechanic.findUnique({ where: { id: validMechanicId } }).catch(() => null);
+      if (!mechInDb) {
+        validMechanicId = null;
+      }
+    }
+
     const bookingDate = new Date(dto.date);
 
     let createdBooking: any = null;
@@ -123,8 +140,8 @@ export class BookingsService {
         data: {
           userId,
           vehicleId,
-          serviceId: dto.serviceId,
-          mechanicId: dto.mechanicId || null,
+          serviceId: validServiceId,
+          mechanicId: validMechanicId,
           date: bookingDate,
           timeSlot: dto.timeSlot,
           notes: dto.notes,
@@ -138,39 +155,41 @@ export class BookingsService {
         },
       });
     } catch (e) {
-      const serviceObj = await this.prisma.service.findUnique({ where: { id: dto.serviceId } }).catch(() => null);
+      const serviceObj = await this.prisma.service.findUnique({ where: { id: validServiceId } }).catch(() => null);
+      const vehicleObj = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } }).catch(() => null);
+      const userObj = await this.prisma.user.findUnique({ where: { id: userId } }).catch(() => null);
       const memUser = globalMemoryUsers.get(userId);
 
       createdBooking = {
         id: `booking-${Date.now()}`,
         userId,
         vehicleId,
-        serviceId: dto.serviceId,
-        mechanicId: dto.mechanicId || null,
-        date: bookingDate,
+        serviceId: validServiceId,
+        mechanicId: validMechanicId,
+        date: bookingDate.toISOString(),
         timeSlot: dto.timeSlot,
         notes: dto.notes,
         status: BookingStatus.PENDING,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        vehicle: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        vehicle: vehicleObj || {
           id: vehicleId,
           brand: dto.brand || 'Kendaraan',
           model: dto.model || 'Servis',
           plateNumber: (dto.plateNumber || 'B 1234 BKL').toUpperCase(),
         },
         service: serviceObj || {
-          id: dto.serviceId,
+          id: validServiceId,
           name: 'Servis Berkala & Ganti Oli',
           price: 150000,
           durationMinutes: 45,
         },
-        mechanic: dto.mechanicId ? { id: dto.mechanicId, name: 'Budi Santoso', specialization: 'Mesin & Transmisi' } : null,
+        mechanic: validMechanicId ? { id: validMechanicId, name: 'Budi Santoso', specialization: 'Mesin & Transmisi' } : null,
         user: {
           id: userId,
-          name: memUser?.name || 'Customer',
-          email: memUser?.email || 'customer@bengkel.com',
-          phone: memUser?.phone || '08123456789',
+          name: userObj?.name || memUser?.name || 'Customer',
+          email: userObj?.email || memUser?.email || 'customer@bengkel.com',
+          phone: userObj?.phone || memUser?.phone || '08123456789',
         },
       };
     }
@@ -201,6 +220,7 @@ export class BookingsService {
 
     return Array.from(merged.values()).map((b) => ({
       ...b,
+      date: b.date ? new Date(b.date).toISOString() : new Date().toISOString(),
       vehicle: b.vehicle || {
         brand: 'Kendaraan',
         model: 'Servis',
@@ -257,10 +277,14 @@ export class BookingsService {
 
     return list.map((b) => {
       const memUser = globalMemoryUsers.get(b.userId);
+      const validDateObj = b.date ? new Date(b.date) : new Date();
+      const isoDate = isNaN(validDateObj.getTime()) ? new Date().toISOString() : validDateObj.toISOString();
+
       return {
         ...b,
+        date: isoDate,
         user: b.user || {
-          id: b.userId,
+          id: b.userId || 'usr-default',
           name: memUser?.name || 'Customer',
           email: memUser?.email || 'customer@bengkel.com',
           phone: memUser?.phone || '08123456789',
@@ -269,6 +293,11 @@ export class BookingsService {
           brand: 'Kendaraan',
           model: 'Servis',
           plateNumber: 'B 1234 BKL',
+        },
+        service: b.service || {
+          name: 'Servis Berkala & Ganti Oli',
+          price: 150000,
+          durationMinutes: 30,
         },
       };
     });
@@ -292,12 +321,20 @@ export class BookingsService {
         }))
       : booking?.mechanic;
 
+    const validDateObj = booking?.date ? new Date(booking.date) : new Date();
+    const isoDate = isNaN(validDateObj.getTime()) ? new Date().toISOString() : validDateObj.toISOString();
+
     const updatedBooking = {
       ...booking,
       id,
+      date: isoDate,
+      timeSlot: booking?.timeSlot || '08:00',
       status: dto.status,
       mechanicId: dto.mechanicId || booking?.mechanicId || null,
       mechanic: mechanicObj || booking?.mechanic,
+      user: booking?.user || { name: 'Customer', phone: '08123456789' },
+      vehicle: booking?.vehicle || { brand: 'Honda', model: 'Beat', plateNumber: 'B 4533 BTP' },
+      service: booking?.service || { name: 'Servis Berkala & Ganti Oli', price: 150000, durationMinutes: 30 },
     };
 
     globalMemoryBookingsMap.set(id, updatedBooking);
