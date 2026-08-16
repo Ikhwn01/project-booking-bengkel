@@ -93,7 +93,6 @@ export default function AdminDashboardPage() {
       });
       return res.data;
     },
-    refetchInterval: 5000,
   });
 
   const { data: stats } = useQuery<{
@@ -107,7 +106,6 @@ export default function AdminDashboardPage() {
       const res = await api.get('/bookings/stats/revenue');
       return res.data;
     },
-    refetchInterval: 5000,
   });
 
   const { data: mechanics } = useQuery<MechanicItem[]>({
@@ -175,7 +173,7 @@ export default function AdminDashboardPage() {
         </div>
         <button
           onClick={() => refetch()}
-          className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 transition-colors border border-slate-700"
+          className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 transition-colors border border-slate-700 shadow-md"
         >
           <RefreshCw className="w-4 h-4" />
           {t.dashRefresh}
