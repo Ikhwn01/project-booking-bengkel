@@ -93,6 +93,7 @@ export default function AdminDashboardPage() {
       });
       return res.data;
     },
+    refetchInterval: 5000,
   });
 
   const { data: stats } = useQuery<{
@@ -106,6 +107,7 @@ export default function AdminDashboardPage() {
       const res = await api.get('/bookings/stats/revenue');
       return res.data;
     },
+    refetchInterval: 5000,
   });
 
   const { data: mechanics } = useQuery<MechanicItem[]>({
