@@ -1,5 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as bcrypt from 'bcrypt';
 
 const DEFAULT_SERVICES = [
@@ -41,19 +43,38 @@ const DEFAULT_MECHANICS = [
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    let dbUrl = process.env.DATABASE_URL || 'file:./dev.db';
+
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      try {
+        const tmpDbPath = '/tmp/dev.db';
+        const sourceDbPath = path.join(process.cwd(), 'prisma', 'dev.db');
+        if (fs.existsSync(sourceDbPath) && !fs.existsSync(tmpDbPath)) {
+          fs.copyFileSync(sourceDbPath, tmpDbPath);
+        }
+        dbUrl = 'file:/tmp/dev.db';
+      } catch (e) {}
+    }
+
+    super({
+      datasources: {
+        db: {
+          url: dbUrl,
+        },
+      },
+    });
+  }
+
   async onModuleInit() {
     try {
       await this.$connect();
-      console.log('✅ Connected to Supabase PostgreSQL database!');
       await this.seedInitialDataIfNeeded();
-    } catch (e) {
-      console.error('❌ Database connection error:', e);
-    }
+    } catch (e) {}
   }
 
   async seedInitialDataIfNeeded() {
     try {
-      // 1. Seed Services into Supabase
       const srvCount = await this.service.count().catch(() => 0);
       if (srvCount === 0) {
         for (const s of DEFAULT_SERVICES) {
@@ -65,7 +86,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         }
       }
 
-      // 2. Seed Mechanics into Supabase
       const mechCount = await this.mechanic.count().catch(() => 0);
       if (mechCount === 0) {
         for (const m of DEFAULT_MECHANICS) {
@@ -77,10 +97,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         }
       }
 
-      // 3. Seed Users & Vehicles into Supabase
       const userCount = await this.user.count().catch(() => 0);
       if (userCount === 0) {
-        console.log('🌱 Seeding initial demo users into Supabase...');
         const adminPass = await bcrypt.hash('admin123', 10);
         const custPass = await bcrypt.hash('customer123', 10);
 
@@ -129,12 +147,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             notes: 'Harap periksa tarikan awal agak berat',
           },
         });
-
-        console.log('✅ Supabase demo data successfully seeded!');
       }
-    } catch (e) {
-      console.error('Seed error:', e);
-    }
+    } catch (e) {}
   }
 
   async onModuleDestroy() {
