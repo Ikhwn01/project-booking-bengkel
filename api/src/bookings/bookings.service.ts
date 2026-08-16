@@ -277,12 +277,23 @@ export class BookingsService {
       include: { service: true },
     }).catch(() => []);
 
-    const completedBookings = allBookings.filter((b) => b.status === 'DONE');
-    const totalRevenue = completedBookings.reduce((sum, b) => sum + (b.service?.price || 150000), 0);
+    const completedBookings = allBookings.filter(
+      (b) => b.status?.toUpperCase().trim() === 'DONE',
+    );
+    const totalRevenue = completedBookings.reduce(
+      (sum, b) => sum + (b.service?.price || 150000),
+      0,
+    );
     const totalCompleted = completedBookings.length;
 
-    const pendingCount = allBookings.filter((b) => b.status === 'PENDING').length;
-    const inProgressCount = allBookings.filter((b) => b.status === 'IN_PROGRESS' || b.status === 'CONFIRMED').length;
+    const pendingCount = allBookings.filter(
+      (b) => b.status?.toUpperCase().trim() === 'PENDING',
+    ).length;
+
+    const inProgressCount = allBookings.filter((b) => {
+      const s = b.status?.toUpperCase().trim();
+      return s === 'IN_PROGRESS' || s === 'CONFIRMED';
+    }).length;
 
     return {
       totalRevenue,
