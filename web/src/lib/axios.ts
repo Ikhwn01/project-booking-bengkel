@@ -1,7 +1,15 @@
 import axios from 'axios';
 
+let baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+if (baseURL && !baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
+  baseURL = `https://${baseURL}`;
+}
+
+baseURL = baseURL.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },

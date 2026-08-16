@@ -45,7 +45,8 @@ export default function RegisterPage() {
       router.push('/booking');
     } catch (err: any) {
       if (!err.response) {
-        setErrorMsg('Gagal terhubung ke API. Harap lakukan "Redeploy" di Vercel agar NEXT_PUBLIC_API_URL aktif.');
+        const targetUrl = api.defaults.baseURL || 'http://localhost:3001';
+        setErrorMsg(`Gagal terhubung ke API (${targetUrl}). Harap Lakukan "Redeploy" di Vercel.`);
         return;
       }
 
