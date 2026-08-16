@@ -95,7 +95,7 @@ export default function AdminDashboardPage() {
     },
   });
 
-  const { data: stats } = useQuery<{
+  const { data: stats, refetch: refetchStats } = useQuery<{
     totalRevenue: number;
     totalCompleted: number;
     pendingCount: number;
@@ -124,9 +124,10 @@ export default function AdminDashboardPage() {
         mechanicId: mechanicId || undefined,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['revenue-stats'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      await refetch();
+      await refetchStats();
       setEditingBooking(null);
     },
     onError: (err: any) => {
@@ -161,6 +162,12 @@ export default function AdminDashboardPage() {
     });
   };
 
+  const handleManualRefresh = async () => {
+    await queryClient.invalidateQueries();
+    await refetch();
+    await refetchStats();
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-10 space-y-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -172,7 +179,7 @@ export default function AdminDashboardPage() {
           <h1 className="text-3xl font-extrabold text-white">{t.dashTitle}</h1>
         </div>
         <button
-          onClick={() => refetch()}
+          onClick={handleManualRefresh}
           className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 transition-colors border border-slate-700 shadow-md"
         >
           <RefreshCw className="w-4 h-4" />
