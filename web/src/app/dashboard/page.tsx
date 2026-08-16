@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   RefreshCw,
   XCircle,
+  AlertCircle,
 } from 'lucide-react';
 
 interface BookingItem {
@@ -60,6 +61,7 @@ export default function AdminDashboardPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [editingBooking, setEditingBooking] = useState<BookingItem | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const [assignedMechanicId, setAssignedMechanicId] = useState<string>('');
   const [newStatus, setNewStatus] = useState<string>('');
@@ -116,6 +118,7 @@ export default function AdminDashboardPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, status, mechanicId }: { id: string; status: string; mechanicId?: string }) => {
+      setModalError(null);
       return api.patch(`/bookings/${id}/status`, {
         status,
         mechanicId: mechanicId || undefined,
@@ -125,6 +128,9 @@ export default function AdminDashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['revenue-stats'] });
       setEditingBooking(null);
+    },
+    onError: (err: any) => {
+      setModalError(err.response?.data?.message || 'Gagal memperbarui status. Periksa koneksi API.');
     },
   });
 
@@ -140,6 +146,7 @@ export default function AdminDashboardPage() {
   });
 
   const openEditModal = (booking: BookingItem) => {
+    setModalError(null);
     setEditingBooking(booking);
     setNewStatus(booking.status);
     setAssignedMechanicId(booking.mechanic?.id || '');
@@ -376,6 +383,13 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
+            {modalError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
             <div className="text-xs space-y-1 text-slate-300">
               <p>
                 <strong className="text-white">{t.dashCustomerLabel}</strong> {editingBooking.user?.name || 'Customer'} ({editingBooking.user?.phone || '-'})
@@ -435,9 +449,16 @@ export default function AdminDashboardPage() {
                 type="button"
                 onClick={handleSaveStatus}
                 disabled={updateMutation.isPending}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors shadow-lg shadow-blue-600/30 disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors shadow-lg shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {updateMutation.isPending ? t.dashModalSaving : t.dashModalSave}
+                {updateMutation.isPending ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>{t.dashModalSaving}</span>
+                  </>
+                ) : (
+                  t.dashModalSave
+                )}
               </button>
             </div>
           </div>
