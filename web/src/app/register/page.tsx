@@ -44,7 +44,14 @@ export default function RegisterPage() {
 
       router.push('/booking');
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || 'Registrasi gagal. Periksa data Anda.');
+      const msg = err.response?.data?.message;
+      if (Array.isArray(msg)) {
+        setErrorMsg(msg.join(', '));
+      } else if (typeof msg === 'string') {
+        setErrorMsg(msg);
+      } else {
+        setErrorMsg('Registrasi gagal. Periksa koneksi internet atau data Anda.');
+      }
     }
   };
 
@@ -62,9 +69,9 @@ export default function RegisterPage() {
         </div>
 
         {errorMsg && (
-          <div className="mb-6 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="mb-6 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span className="font-medium">{errorMsg}</span>
           </div>
         )}
 
