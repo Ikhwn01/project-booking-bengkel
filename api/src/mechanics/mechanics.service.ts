@@ -3,59 +3,38 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateMechanicDto } from './dto/create-mechanic.dto';
 
 const DEFAULT_MECHANICS = [
-  { name: 'Budi Santoso', specialization: 'Mesin & Tune Up Injeksi', isAvailable: true },
-  { name: 'Agus Setiawan', specialization: 'Rem & Kaki-kaki', isAvailable: true },
-  { name: 'Eko Prasetyo', specialization: 'Kelistrikan & ECU', isAvailable: true },
+  { id: 'mech-1', name: 'Budi Santoso', specialization: 'Mesin & Tune Up Injeksi', isAvailable: true },
+  { id: 'mech-2', name: 'Agus Setiawan', specialization: 'Rem & Kaki-kaki', isAvailable: true },
+  { id: 'mech-3', name: 'Eko Prasetyo', specialization: 'Kelistrikan & ECU', isAvailable: true },
 ];
 
 @Injectable()
 export class MechanicsService {
   constructor(private prisma: PrismaService) {}
 
-  private async ensureDefaultMechanics() {
-    let mechanics = await this.prisma.mechanic.findMany().catch(() => []);
-    if (mechanics.length === 0) {
-      for (const m of DEFAULT_MECHANICS) {
-        await this.prisma.mechanic.create({ data: m }).catch(() => {});
-      }
-    }
-  }
-
   async findAll() {
-    await this.ensureDefaultMechanics();
-    let mechanics = await this.prisma.mechanic.findMany({
-      orderBy: { name: 'asc' },
-    }).catch(() => []);
-
-    if (mechanics.length === 0) {
-      return DEFAULT_MECHANICS.map((m, idx) => ({
-        id: `mech-${idx + 1}`,
-        ...m,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-    }
-
-    return mechanics;
+    try {
+      const dbMechanics = await this.prisma.mechanic.findMany({
+        orderBy: { name: 'asc' },
+      });
+      if (dbMechanics && dbMechanics.length > 0) {
+        return dbMechanics;
+      }
+    } catch (e) {}
+    return DEFAULT_MECHANICS;
   }
 
   async findAvailable() {
-    await this.ensureDefaultMechanics();
-    let mechanics = await this.prisma.mechanic.findMany({
-      where: { isAvailable: true },
-      orderBy: { name: 'asc' },
-    }).catch(() => []);
-
-    if (mechanics.length === 0) {
-      return DEFAULT_MECHANICS.map((m, idx) => ({
-        id: `mech-${idx + 1}`,
-        ...m,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
-    }
-
-    return mechanics;
+    try {
+      const dbMechanics = await this.prisma.mechanic.findMany({
+        where: { isAvailable: true },
+        orderBy: { name: 'asc' },
+      });
+      if (dbMechanics && dbMechanics.length > 0) {
+        return dbMechanics;
+      }
+    } catch (e) {}
+    return DEFAULT_MECHANICS;
   }
 
   async create(dto: CreateMechanicDto) {
