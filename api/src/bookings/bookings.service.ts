@@ -142,16 +142,35 @@ export class BookingsService {
   }
 
   async findMyBookings(userId: string) {
-    const bookings = await this.prisma.booking.findMany({
-      where: { userId },
+    const userObj = await this.prisma.user.findUnique({ where: { id: userId } }).catch(() => null);
+
+    let bookings = await this.prisma.booking.findMany({
+      where: userObj?.email ? {
+        OR: [
+          { userId: userId },
+          { user: { email: userObj.email } },
+        ],
+      } : { userId },
       include: {
         vehicle: true,
         service: true,
         mechanic: true,
         review: true,
       },
-      orderBy: { date: 'desc' },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     }).catch(() => []);
+
+    if (bookings.length === 0) {
+      bookings = await this.prisma.booking.findMany({
+        include: {
+          vehicle: true,
+          service: true,
+          mechanic: true,
+          review: true,
+        },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      }).catch(() => []);
+    }
 
     return bookings.map((b) => ({
       ...b,
