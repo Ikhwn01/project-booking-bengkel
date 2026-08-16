@@ -17,17 +17,16 @@ export const STANDARD_SLOTS = [
 ];
 
 const MAX_BAY_CAPACITY_PER_SLOT = 3;
-export const globalMemoryBookingsMap = new Map<string, any>();
 
 @Injectable()
 export class BookingsService {
   constructor(private prisma: PrismaService) {}
 
   private async ensureUserExists(userId: string) {
-    try {
-      let userInDb = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!userInDb) {
-        const memUser = globalMemoryUsers.get(userId);
+    let userInDb = await this.prisma.user.findUnique({ where: { id: userId } }).catch(() => null);
+    if (!userInDb) {
+      const memUser = globalMemoryUsers.get(userId);
+      try {
         userInDb = await this.prisma.user.create({
           data: {
             id: userId,
@@ -37,14 +36,12 @@ export class BookingsService {
             phone: memUser?.phone || '08123456789',
             role: memUser?.role || Role.CUSTOMER,
           },
-        }).catch(async () => {
-          return await this.prisma.user.findFirst({ where: { role: Role.CUSTOMER } }).catch(() => null);
         });
+      } catch (e) {
+        userInDb = await this.prisma.user.findFirst({ where: { role: Role.CUSTOMER } }).catch(() => null);
       }
-      return userInDb;
-    } catch (e) {
-      return null;
     }
+    return userInDb;
   }
 
   async checkAvailability(dateStr: string, mechanicId?: string) {
@@ -52,26 +49,15 @@ export class BookingsService {
     const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
     const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
 
-    const dbBookings = await this.prisma.booking.findMany({
+    const existingBookings = await this.prisma.booking.findMany({
       where: {
         date: { gte: startOfDay, lte: endOfDay },
         status: { not: BookingStatus.CANCELLED },
       },
     }).catch(() => []);
 
-    const memBookings = Array.from(globalMemoryBookingsMap.values()).filter((b) => {
-      const bDate = new Date(b.date);
-      return (
-        bDate >= startOfDay &&
-        bDate <= endOfDay &&
-        b.status !== BookingStatus.CANCELLED
-      );
-    });
-
-    const allBookings = [...dbBookings, ...memBookings];
-
     const slotsAvailability = STANDARD_SLOTS.map((slot) => {
-      const bookingsInSlot = allBookings.filter((b) => b.timeSlot === slot);
+      const bookingsInSlot = existingBookings.filter((b) => b.timeSlot === slot);
       const isMechanicBooked = mechanicId
         ? bookingsInSlot.some((b) => b.mechanicId === mechanicId)
         : false;
@@ -104,41 +90,47 @@ export class BookingsService {
           'Pilih kendaraan yang ada atau masukan informasi lengkap kendaraan baru (merk, model, plat nomor)',
         );
       }
-      const newVehicle = await this.prisma.vehicle.create({
-        data: {
-          userId: validUserId,
-          brand: dto.brand,
-          model: dto.model,
-          plateNumber: dto.plateNumber.toUpperCase(),
-        },
-      }).catch(async () => {
+      try {
+        const newVehicle = await this.prisma.vehicle.create({
+          data: {
+            userId: validUserId,
+            brand: dto.brand,
+            model: dto.model,
+            plateNumber: dto.plateNumber.toUpperCase(),
+          },
+        });
+        vehicleId = newVehicle.id;
+      } catch (e) {
         const existingVehicle = await this.prisma.vehicle.findFirst({ where: { userId: validUserId } }).catch(() => null);
-        return existingVehicle || {
-          id: `veh-${Date.now()}`,
-          userId: validUserId,
-          brand: dto.brand || 'Honda',
-          model: dto.model || 'Vario 160',
-          plateNumber: (dto.plateNumber || 'B 1234 BKL').toUpperCase(),
-        };
-      });
-      vehicleId = newVehicle.id;
+        if (existingVehicle) {
+          vehicleId = existingVehicle.id;
+        } else {
+          throw new BadRequestException('Gagal mendaftarkan kendaraan baru ke Supabase PostgreSQL.');
+        }
+      }
     }
 
     let serviceInDb = await this.prisma.service.findUnique({ where: { id: dto.serviceId } }).catch(() => null);
     if (!serviceInDb) {
-      serviceInDb = await this.prisma.service.create({
-        data: {
-          id: dto.serviceId,
-          name: 'Servis Berkala & Ganti Oli',
-          price: 150000,
-          durationMinutes: 30,
-          description: 'Pengecekan rutin dan ganti oli mesin.',
-        },
-      }).catch(async () => {
-        return await this.prisma.service.findFirst().catch(() => null);
-      });
+      try {
+        serviceInDb = await this.prisma.service.create({
+          data: {
+            id: dto.serviceId,
+            name: 'Servis Berkala & Ganti Oli',
+            price: 150000,
+            durationMinutes: 30,
+            description: 'Pengecekan rutin dan ganti oli mesin.',
+          },
+        });
+      } catch (e) {
+        serviceInDb = await this.prisma.service.findFirst().catch(() => null);
+      }
     }
-    const finalServiceId = serviceInDb?.id || dto.serviceId;
+
+    if (!serviceInDb) {
+      throw new BadRequestException('Paket layanan servis tidak ditemukan di Supabase.');
+    }
+    const finalServiceId = serviceInDb.id;
 
     let finalMechanicId = dto.mechanicId || null;
     if (finalMechanicId) {
@@ -150,9 +142,8 @@ export class BookingsService {
 
     const bookingDate = new Date(dto.date);
 
-    let createdBooking: any = null;
     try {
-      createdBooking = await this.prisma.booking.create({
+      const createdBooking = await this.prisma.booking.create({
         data: {
           userId: validUserId,
           vehicleId,
@@ -170,51 +161,15 @@ export class BookingsService {
           user: { select: { id: true, name: true, email: true, phone: true } },
         },
       });
-    } catch (e) {
-      console.error('Booking create error, using fallback:', e);
-      const vehicleObj = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } }).catch(() => null);
-      const memUser = globalMemoryUsers.get(userId);
-
-      createdBooking = {
-        id: `booking-${Date.now()}`,
-        userId: validUserId,
-        vehicleId,
-        serviceId: finalServiceId,
-        mechanicId: finalMechanicId,
-        date: bookingDate.toISOString(),
-        timeSlot: dto.timeSlot,
-        notes: dto.notes,
-        status: BookingStatus.PENDING,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        vehicle: vehicleObj || {
-          id: vehicleId,
-          brand: dto.brand || 'Honda',
-          model: dto.model || 'Vario 160',
-          plateNumber: (dto.plateNumber || 'B 1234 BKL').toUpperCase(),
-        },
-        service: serviceInDb || {
-          id: finalServiceId,
-          name: 'Servis Berkala & Ganti Oli',
-          price: 150000,
-          durationMinutes: 30,
-        },
-        mechanic: finalMechanicId ? { id: finalMechanicId, name: 'Budi Santoso', specialization: 'Mesin & Transmisi' } : null,
-        user: {
-          id: validUserId,
-          name: userObj?.name || memUser?.name || 'Customer',
-          email: userObj?.email || memUser?.email || 'customer@bengkel.com',
-          phone: userObj?.phone || memUser?.phone || '08123456789',
-        },
-      };
+      return createdBooking;
+    } catch (e: any) {
+      console.error('CRITICAL POSTGRESQL INSERTION ERROR:', e);
+      throw new BadRequestException(`Gagal menyimpan booking ke Supabase: ${e.message || 'Error relasi database'}`);
     }
-
-    globalMemoryBookingsMap.set(createdBooking.id, createdBooking);
-    return createdBooking;
   }
 
   async findMyBookings(userId: string) {
-    const dbBookings = await this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where: { userId },
       include: {
         vehicle: true,
@@ -225,21 +180,18 @@ export class BookingsService {
       orderBy: { date: 'desc' },
     }).catch(() => []);
 
-    const memBookings = Array.from(globalMemoryBookingsMap.values()).filter(
-      (b) => b.userId === userId,
-    );
-
-    const merged = new Map<string, any>();
-    dbBookings.forEach((b) => merged.set(b.id, b));
-    memBookings.forEach((b) => merged.set(b.id, b));
-
-    return Array.from(merged.values()).map((b) => ({
+    return bookings.map((b) => ({
       ...b,
       date: b.date ? new Date(b.date).toISOString() : new Date().toISOString(),
       vehicle: b.vehicle || {
         brand: 'Kendaraan',
         model: 'Servis',
         plateNumber: 'B 1234 BKL',
+      },
+      service: b.service || {
+        name: 'Servis Berkala & Ganti Oli',
+        price: 150000,
+        durationMinutes: 30,
       },
     }));
   }
@@ -263,7 +215,7 @@ export class BookingsService {
       whereClause.mechanicId = query.mechanicId;
     }
 
-    const dbBookings = await this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where: whereClause,
       include: {
         user: { select: { id: true, name: true, email: true, phone: true } },
@@ -275,23 +227,7 @@ export class BookingsService {
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     }).catch(() => []);
 
-    const memBookings = Array.from(globalMemoryBookingsMap.values());
-
-    const mergedMap = new Map<string, any>();
-    dbBookings.forEach((b) => mergedMap.set(b.id, b));
-    memBookings.forEach((b) => mergedMap.set(b.id, b));
-
-    let list = Array.from(mergedMap.values());
-
-    if (query.status) {
-      list = list.filter((b) => b.status === query.status);
-    }
-    if (query.mechanicId) {
-      list = list.filter((b) => b.mechanicId === query.mechanicId);
-    }
-
-    return list.map((b) => {
-      const memUser = globalMemoryUsers.get(b.userId);
+    return bookings.map((b) => {
       const validDateObj = b.date ? new Date(b.date) : new Date();
       const isoDate = isNaN(validDateObj.getTime()) ? new Date().toISOString() : validDateObj.toISOString();
 
@@ -300,9 +236,9 @@ export class BookingsService {
         date: isoDate,
         user: b.user || {
           id: b.userId || 'usr-default',
-          name: memUser?.name || 'Customer',
-          email: memUser?.email || 'customer@bengkel.com',
-          phone: memUser?.phone || '08123456789',
+          name: 'Customer',
+          email: 'customer@bengkel.com',
+          phone: '08123456789',
         },
         vehicle: b.vehicle || {
           brand: 'Kendaraan',
@@ -319,63 +255,47 @@ export class BookingsService {
   }
 
   async updateStatus(id: string, dto: UpdateBookingStatusDto) {
-    let booking = await this.prisma.booking.findUnique({
-      where: { id },
-      include: { service: true, vehicle: true, user: true, mechanic: true },
-    }).catch(() => null);
-
-    if (!booking && globalMemoryBookingsMap.has(id)) {
-      booking = globalMemoryBookingsMap.get(id);
+    const dataToUpdate: any = {
+      status: dto.status,
+    };
+    if (dto.mechanicId !== undefined) {
+      dataToUpdate.mechanicId = dto.mechanicId || null;
     }
 
-    const mechanicObj = dto.mechanicId
-      ? await this.prisma.mechanic.findUnique({ where: { id: dto.mechanicId } }).catch(() => ({
-          id: dto.mechanicId,
-          name: 'Budi Santoso',
-          specialization: 'Mesin & Transmisi',
-        }))
-      : booking?.mechanic;
-
-    const validDateObj = booking?.date ? new Date(booking.date) : new Date();
-    const isoDate = isNaN(validDateObj.getTime()) ? new Date().toISOString() : validDateObj.toISOString();
-
-    const updatedBooking = {
-      ...booking,
-      id,
-      date: isoDate,
-      timeSlot: booking?.timeSlot || '08:00',
-      status: dto.status,
-      mechanicId: dto.mechanicId || booking?.mechanicId || null,
-      mechanic: mechanicObj || booking?.mechanic,
-      user: booking?.user || { name: 'Customer', phone: '08123456789' },
-      vehicle: booking?.vehicle || { brand: 'Honda', model: 'Beat', plateNumber: 'B 4533 BTP' },
-      service: booking?.service || { name: 'Servis Berkala & Ganti Oli', price: 150000, durationMinutes: 30 },
-    };
-
-    globalMemoryBookingsMap.set(id, updatedBooking);
-
     try {
-      await this.prisma.booking.update({
+      const updated = await this.prisma.booking.update({
         where: { id },
-        data: {
-          status: dto.status,
-          mechanicId: dto.mechanicId || undefined,
+        data: dataToUpdate,
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true } },
+          vehicle: true,
+          service: true,
+          mechanic: true,
+          review: true,
         },
       });
-    } catch (e) {}
-
-    return updatedBooking;
+      return updated;
+    } catch (e) {
+      throw new NotFoundException('Booking tidak ditemukan di database Supabase untuk diperbarui');
+    }
   }
 
   async getRevenueStats() {
-    const allBookings = await this.findAll({});
+    const completedBookings = await this.prisma.booking.findMany({
+      where: { status: BookingStatus.DONE },
+      include: { service: true },
+    }).catch(() => []);
 
-    const completedBookings = allBookings.filter((b) => b.status === BookingStatus.DONE);
     const totalRevenue = completedBookings.reduce((sum, b) => sum + (b.service?.price || 150000), 0);
     const totalCompleted = completedBookings.length;
 
-    const pendingCount = allBookings.filter((b) => b.status === BookingStatus.PENDING).length;
-    const inProgressCount = allBookings.filter((b) => b.status === BookingStatus.IN_PROGRESS).length;
+    const pendingCount = await this.prisma.booking.count({
+      where: { status: BookingStatus.PENDING },
+    }).catch(() => 0);
+
+    const inProgressCount = await this.prisma.booking.count({
+      where: { status: BookingStatus.IN_PROGRESS },
+    }).catch(() => 0);
 
     return {
       totalRevenue,
