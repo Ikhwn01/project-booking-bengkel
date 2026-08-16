@@ -23,20 +23,20 @@ interface BookingItem {
   timeSlot: string;
   status: 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
   notes?: string;
-  user: {
-    name: string;
-    email: string;
-    phone: string;
+  user?: {
+    name?: string;
+    email?: string;
+    phone?: string;
   };
-  vehicle: {
-    brand: string;
-    model: string;
-    plateNumber: string;
+  vehicle?: {
+    brand?: string;
+    model?: string;
+    plateNumber?: string;
   };
-  service: {
-    name: string;
-    price: number;
-    durationMinutes: number;
+  service?: {
+    name?: string;
+    price?: number;
+    durationMinutes?: number;
   };
   mechanic?: {
     id: string;
@@ -129,10 +129,13 @@ export default function AdminDashboardPage() {
   });
 
   const filteredBookings = bookings?.filter((b) => {
+    const userName = b.user?.name || 'Customer';
+    const plate = b.vehicle?.plateNumber || '';
+    const brand = b.vehicle?.brand || '';
     const matchesSearch =
-      b.vehicle.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.vehicle.brand.toLowerCase().includes(searchTerm.toLowerCase());
+      plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      brand.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
@@ -254,7 +257,7 @@ export default function AdminDashboardPage() {
                 setSelectedStatus('');
                 setSearchTerm('');
               }}
-              className="text-xs text-red-400 hover:underline px-2 py-1"
+              className="text-xs text-red-400 hover:underline px-2 py-1 font-medium"
             >
               {t.dashResetFilter}
             </button>
@@ -292,11 +295,11 @@ export default function AdminDashboardPage() {
                 filteredBookings?.map((b) => (
                   <tr key={b.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-bold text-white text-sm">{b.user.name}</div>
-                      <div className="text-slate-400 text-[11px]">{b.user.phone}</div>
+                      <div className="font-bold text-white text-sm">{b.user?.name || 'Customer'}</div>
+                      <div className="text-slate-400 text-[11px]">{b.user?.phone || '-'}</div>
                       <div className="inline-flex items-center gap-1 mt-1 text-[11px] text-blue-400 font-mono">
                         <Car className="w-3 h-3" />
-                        {b.vehicle.brand} {b.vehicle.model} ({b.vehicle.plateNumber})
+                        {b.vehicle?.brand || ''} {b.vehicle?.model || ''} ({b.vehicle?.plateNumber || 'N/A'})
                       </div>
                     </td>
 
@@ -312,9 +315,9 @@ export default function AdminDashboardPage() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-white">{getServiceName(b.service.name)}</div>
+                      <div className="font-semibold text-white">{getServiceName(b.service?.name || '')}</div>
                       <div className="text-emerald-400 font-bold">
-                        {formatPrice(b.service.price)}
+                        {formatPrice(b.service?.price || 0)}
                       </div>
                     </td>
 
@@ -375,13 +378,13 @@ export default function AdminDashboardPage() {
 
             <div className="text-xs space-y-1 text-slate-300">
               <p>
-                <strong className="text-white">{t.dashCustomerLabel}</strong> {editingBooking.user.name} ({editingBooking.user.phone})
+                <strong className="text-white">{t.dashCustomerLabel}</strong> {editingBooking.user?.name || 'Customer'} ({editingBooking.user?.phone || '-'})
               </p>
               <p>
-                <strong className="text-white">{t.dashVehicleLabel}</strong> {editingBooking.vehicle.brand} {editingBooking.vehicle.model} - {editingBooking.vehicle.plateNumber}
+                <strong className="text-white">{t.dashVehicleLabel}</strong> {editingBooking.vehicle?.brand} {editingBooking.vehicle?.model} - {editingBooking.vehicle?.plateNumber}
               </p>
               <p>
-                <strong className="text-white">{t.dashServiceLabel}</strong> {getServiceName(editingBooking.service.name)}
+                <strong className="text-white">{t.dashServiceLabel}</strong> {getServiceName(editingBooking.service?.name || '')}
               </p>
             </div>
 

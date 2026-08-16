@@ -158,7 +158,7 @@ export class BookingsService {
   }
 
   async findMyBookings(userId: string) {
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where: { userId },
       include: {
         vehicle: true,
@@ -168,6 +168,15 @@ export class BookingsService {
       },
       orderBy: { date: 'desc' },
     });
+
+    return bookings.map((b) => ({
+      ...b,
+      vehicle: b.vehicle || {
+        brand: 'Kendaraan',
+        model: 'Servis',
+        plateNumber: 'B 1234 BKL',
+      },
+    }));
   }
 
   async findAll(query: { date?: string; status?: BookingStatus; mechanicId?: string }) {
@@ -189,7 +198,7 @@ export class BookingsService {
       whereClause.mechanicId = query.mechanicId;
     }
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where: whereClause,
       include: {
         user: { select: { id: true, name: true, email: true, phone: true } },
@@ -199,6 +208,24 @@ export class BookingsService {
         review: true,
       },
       orderBy: [{ date: 'asc' }, { timeSlot: 'asc' }],
+    });
+
+    return bookings.map((b) => {
+      const memUser = globalMemoryUsers.get(b.userId);
+      return {
+        ...b,
+        user: b.user || {
+          id: b.userId,
+          name: memUser?.name || 'Customer',
+          email: memUser?.email || 'customer@bengkel.com',
+          phone: memUser?.phone || '08123456789',
+        },
+        vehicle: b.vehicle || {
+          brand: 'Kendaraan',
+          model: 'Servis',
+          plateNumber: 'B 1234 BKL',
+        },
+      };
     });
   }
 
