@@ -6,8 +6,6 @@ import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { Role } from '../common/enums';
 
-export const globalMemoryUsers = new Map<string, any>();
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -16,47 +14,24 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    let existing: any = null;
-    try {
-      existing = await this.prisma.user.findUnique({
-        where: { email: dto.email },
-      });
-    } catch (e) {}
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    }).catch(() => null);
+
+    if (existing) {
+      throw new BadRequestException('Email sudah terdaftar. Silakan gunakan email lain atau login.');
+    }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    let user: any = existing;
-
-    if (!user && globalMemoryUsers.has(dto.email)) {
-      user = globalMemoryUsers.get(dto.email);
-    }
-
-    if (!user) {
-      try {
-        user = await this.prisma.user.create({
-          data: {
-            name: dto.name,
-            email: dto.email,
-            password: hashedPassword,
-            phone: dto.phone,
-            role: dto.role || Role.CUSTOMER,
-          },
-        });
-      } catch (err) {
-        user = {
-          id: `user-${Date.now()}`,
-          name: dto.name,
-          email: dto.email,
-          password: hashedPassword,
-          phone: dto.phone,
-          role: dto.role || Role.CUSTOMER,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-      }
-    }
-
-    globalMemoryUsers.set(dto.email, user);
-    globalMemoryUsers.set(user.id, user);
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        password: hashedPassword,
+        phone: dto.phone,
+        role: dto.role || Role.CUSTOMER,
+      },
+    });
 
     const { password, ...result } = user;
     const token = this.jwtService.sign({
@@ -74,48 +49,17 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    let user: any = null;
-    try {
-      user = await this.prisma.user.findUnique({
-        where: { email: dto.email },
-      });
-    } catch (e) {}
+    let user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    }).catch(() => null);
 
-    if (!user && globalMemoryUsers.has(dto.email)) {
-      user = globalMemoryUsers.get(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('Email atau password salah. Periksa kembali akun Anda.');
     }
 
-    if (user) {
-      const isPasswordValid = await bcrypt.compare(dto.password, user.password);
-      if (!isPasswordValid) {
-        throw new UnauthorizedException('Password salah. Periksa kembali password Anda.');
-      }
-    } else {
-      const hashedPassword = await bcrypt.hash(dto.password, 10);
-      try {
-        user = await this.prisma.user.create({
-          data: {
-            name: dto.email.split('@')[0],
-            email: dto.email,
-            password: hashedPassword,
-            phone: '08123456789',
-            role: dto.email.includes('admin') ? Role.ADMIN : Role.CUSTOMER,
-          },
-        });
-      } catch (e) {
-        user = {
-          id: `user-${Date.now()}`,
-          name: dto.email.split('@')[0],
-          email: dto.email,
-          password: hashedPassword,
-          phone: '08123456789',
-          role: dto.email.includes('admin') ? Role.ADMIN : Role.CUSTOMER,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-      }
-      globalMemoryUsers.set(dto.email, user);
-      globalMemoryUsers.set(user.id, user);
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Email atau password salah. Periksa kembali password Anda.');
     }
 
     const { password, ...result } = user;
