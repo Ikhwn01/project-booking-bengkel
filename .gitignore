@@ -1,0 +1,39 @@
+# Node.js
+node_modules/
+.npm/
+
+# Next.js
+web/.next/
+web/out/
+web/build/
+
+# NestJS
+api/dist/
+api/build/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+api/.env
+web/.env.local
+
+# Databases & SQLite
+*.db
+*.db-journal
+api/prisma/dev.db
+api/prisma/dev.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
