@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -19,6 +19,8 @@ import {
   PlusCircle,
   ArrowRight,
 } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
 
 const bookingSchema = z.object({
   vehicleId: z.string().optional(),
@@ -64,7 +66,7 @@ interface SlotAvailability {
   isMechanicBooked: boolean;
 }
 
-export default function BookingPage() {
+function BookingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedServiceId = searchParams.get('serviceId') || '';
@@ -441,5 +443,13 @@ export default function BookingPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={<div className="text-center text-slate-400 py-20 text-sm">Loading booking form...</div>}>
+      <BookingForm />
+    </Suspense>
   );
 }
