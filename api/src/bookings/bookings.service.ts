@@ -207,7 +207,7 @@ export class BookingsService {
         mechanic: true,
         review: true,
       },
-      orderBy: [{ date: 'asc' }, { timeSlot: 'asc' }],
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
 
     return bookings.map((b) => {
