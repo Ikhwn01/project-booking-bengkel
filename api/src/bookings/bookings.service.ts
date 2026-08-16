@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 import { BookingStatus, Role } from '../common/enums';
-import { globalMemoryUsers } from '../auth/auth.service';
 
 export const STANDARD_SLOTS = [
   '08:00',
@@ -25,21 +24,7 @@ export class BookingsService {
   private async ensureUserExists(userId: string) {
     let userInDb = await this.prisma.user.findUnique({ where: { id: userId } }).catch(() => null);
     if (!userInDb) {
-      const memUser = globalMemoryUsers.get(userId);
-      try {
-        userInDb = await this.prisma.user.create({
-          data: {
-            id: userId,
-            name: memUser?.name || 'Customer',
-            email: memUser?.email || `user-${Date.now()}@bengkel.com`,
-            password: memUser?.password || '$2b$10$e7q9V/3J5/wQ.4hW.1010e.1010101010101010101010',
-            phone: memUser?.phone || '08123456789',
-            role: memUser?.role || Role.CUSTOMER,
-          },
-        });
-      } catch (e) {
-        userInDb = await this.prisma.user.findFirst({ where: { role: Role.CUSTOMER } }).catch(() => null);
-      }
+      userInDb = await this.prisma.user.findFirst({ where: { role: Role.CUSTOMER } }).catch(() => null);
     }
     return userInDb;
   }
@@ -52,7 +37,7 @@ export class BookingsService {
     const existingBookings = await this.prisma.booking.findMany({
       where: {
         date: { gte: startOfDay, lte: endOfDay },
-        status: { not: BookingStatus.CANCELLED },
+        status: { not: 'CANCELLED' },
       },
     }).catch(() => []);
 
@@ -105,30 +90,18 @@ export class BookingsService {
         if (existingVehicle) {
           vehicleId = existingVehicle.id;
         } else {
-          throw new BadRequestException('Gagal mendaftarkan kendaraan baru ke Supabase PostgreSQL.');
+          throw new BadRequestException('Gagal mendaftarkan kendaraan baru.');
         }
       }
     }
 
     let serviceInDb = await this.prisma.service.findUnique({ where: { id: dto.serviceId } }).catch(() => null);
     if (!serviceInDb) {
-      try {
-        serviceInDb = await this.prisma.service.create({
-          data: {
-            id: dto.serviceId,
-            name: 'Servis Berkala & Ganti Oli',
-            price: 150000,
-            durationMinutes: 30,
-            description: 'Pengecekan rutin dan ganti oli mesin.',
-          },
-        });
-      } catch (e) {
-        serviceInDb = await this.prisma.service.findFirst().catch(() => null);
-      }
+      serviceInDb = await this.prisma.service.findFirst().catch(() => null);
     }
 
     if (!serviceInDb) {
-      throw new BadRequestException('Paket layanan servis tidak ditemukan di Supabase.');
+      throw new BadRequestException('Paket layanan servis tidak ditemukan.');
     }
     const finalServiceId = serviceInDb.id;
 
@@ -152,7 +125,7 @@ export class BookingsService {
           date: bookingDate,
           timeSlot: dto.timeSlot,
           notes: dto.notes,
-          status: BookingStatus.PENDING,
+          status: 'PENDING',
         },
         include: {
           vehicle: true,
@@ -163,8 +136,8 @@ export class BookingsService {
       });
       return createdBooking;
     } catch (e: any) {
-      console.error('CRITICAL POSTGRESQL INSERTION ERROR:', e);
-      throw new BadRequestException(`Gagal menyimpan booking ke Supabase: ${e.message || 'Error relasi database'}`);
+      console.error('Booking creation error:', e);
+      throw new BadRequestException(`Gagal menyimpan booking: ${e.message || 'Error relasi database'}`);
     }
   }
 
@@ -276,26 +249,21 @@ export class BookingsService {
       });
       return updated;
     } catch (e) {
-      throw new NotFoundException('Booking tidak ditemukan di database Supabase untuk diperbarui');
+      throw new NotFoundException('Booking tidak ditemukan untuk diperbarui');
     }
   }
 
   async getRevenueStats() {
-    const completedBookings = await this.prisma.booking.findMany({
-      where: { status: BookingStatus.DONE },
+    const allBookings = await this.prisma.booking.findMany({
       include: { service: true },
     }).catch(() => []);
 
+    const completedBookings = allBookings.filter((b) => b.status === 'DONE');
     const totalRevenue = completedBookings.reduce((sum, b) => sum + (b.service?.price || 150000), 0);
     const totalCompleted = completedBookings.length;
 
-    const pendingCount = await this.prisma.booking.count({
-      where: { status: BookingStatus.PENDING },
-    }).catch(() => 0);
-
-    const inProgressCount = await this.prisma.booking.count({
-      where: { status: BookingStatus.IN_PROGRESS },
-    }).catch(() => 0);
+    const pendingCount = allBookings.filter((b) => b.status === 'PENDING').length;
+    const inProgressCount = allBookings.filter((b) => b.status === 'IN_PROGRESS' || b.status === 'CONFIRMED').length;
 
     return {
       totalRevenue,
