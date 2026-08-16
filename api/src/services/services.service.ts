@@ -9,8 +9,6 @@ const DEFAULT_SERVICES = [
     price: 150000,
     durationMinutes: 30,
     description: 'Pengecekan 20 titik komponen, ganti oli mesin, pencucian saringan udara, dan penyetelan rantai/cvt.',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
   },
   {
     id: 'srv-2',
@@ -18,8 +16,6 @@ const DEFAULT_SERVICES = [
     price: 350000,
     durationMinutes: 60,
     description: 'Pembersihan throttle body, ruang bakar dengan carbon cleaner, penyetelan klep, dan kalibrasi sensor.',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
   },
   {
     id: 'srv-3',
@@ -27,8 +23,6 @@ const DEFAULT_SERVICES = [
     price: 250000,
     durationMinutes: 45,
     description: 'Penggantian kampas rem depan/belakang, pengurasan minyak rem, dan pengecekan bearing roda.',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
   },
   {
     id: 'srv-4',
@@ -36,8 +30,6 @@ const DEFAULT_SERVICES = [
     price: 450000,
     durationMinutes: 30,
     description: 'Pengujian alternator/spul, pengisian daya, dan penggantian aki baru garansi 6 bulan.',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
   },
 ];
 
@@ -46,30 +38,32 @@ export class ServicesService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    try {
-      const dbServices = await this.prisma.service.findMany({
-        orderBy: { price: 'asc' },
-      });
-      if (dbServices && dbServices.length > 0) {
-        return dbServices;
-      }
-    } catch (e) {}
+    let services = await this.prisma.service.findMany({
+      orderBy: { price: 'asc' },
+    }).catch(() => []);
 
-    try {
+    if (services.length === 0) {
       for (const s of DEFAULT_SERVICES) {
-        await this.prisma.service.create({
-          data: {
-            id: s.id,
-            name: s.name,
-            price: s.price,
-            durationMinutes: s.durationMinutes,
-            description: s.description,
-          },
+        await this.prisma.service.upsert({
+          where: { id: s.id },
+          update: {},
+          create: s,
         }).catch(() => {});
       }
-    } catch (e) {}
+      services = await this.prisma.service.findMany({
+        orderBy: { price: 'asc' },
+      }).catch(() => []);
+    }
 
-    return DEFAULT_SERVICES;
+    if (services.length === 0) {
+      return DEFAULT_SERVICES.map((s) => ({
+        ...s,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+    }
+
+    return services;
   }
 
   async findOne(id: string) {
@@ -78,7 +72,7 @@ export class ServicesService {
     }).catch(() => null);
 
     if (!service) {
-      service = DEFAULT_SERVICES.find((s) => s.id === id) || (DEFAULT_SERVICES[0] as any);
+      service = DEFAULT_SERVICES.find((s) => s.id === id) as any;
     }
     return service;
   }
