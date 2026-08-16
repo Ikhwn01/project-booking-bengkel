@@ -44,13 +44,18 @@ export default function RegisterPage() {
 
       router.push('/booking');
     } catch (err: any) {
+      if (!err.response) {
+        setErrorMsg('Gagal terhubung ke API. Harap lakukan "Redeploy" di Vercel agar NEXT_PUBLIC_API_URL aktif.');
+        return;
+      }
+
       const msg = err.response?.data?.message;
       if (Array.isArray(msg)) {
         setErrorMsg(msg.join(', '));
       } else if (typeof msg === 'string') {
         setErrorMsg(msg);
       } else {
-        setErrorMsg('Registrasi gagal. Periksa koneksi internet atau data Anda.');
+        setErrorMsg('Registrasi gagal. Periksa data Anda.');
       }
     }
   };
