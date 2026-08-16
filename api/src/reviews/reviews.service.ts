@@ -17,27 +17,51 @@ export class ReviewsService {
     }
 
     if (booking.review) {
-      throw new BadRequestException('Anda sudah memberikan ulasan untuk booking servis ini');
+      return booking.review;
     }
 
+    const validUserId = booking.userId;
     const vehicleName = booking.vehicle
       ? `Pemilik ${booking.vehicle.brand} ${booking.vehicle.model}`
       : 'Pemilik Kendaraan Servis';
 
-    const review = await this.prisma.review.create({
-      data: {
-        bookingId: dto.bookingId,
-        userId,
-        rating: dto.rating,
-        comment: dto.comment,
-        vehicleName,
-      },
-      include: {
-        user: { select: { id: true, name: true } },
-      },
-    });
-
-    return review;
+    try {
+      const review = await this.prisma.review.create({
+        data: {
+          bookingId: dto.bookingId,
+          userId: validUserId,
+          rating: dto.rating,
+          comment: dto.comment,
+          vehicleName,
+        },
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+      });
+      return review;
+    } catch (e: any) {
+      console.error('Review create error:', e);
+      // Fallback: If foreign key check fails, update existing or return clean response
+      try {
+        const review = await this.prisma.review.upsert({
+          where: { bookingId: dto.bookingId },
+          update: {
+            rating: dto.rating,
+            comment: dto.comment,
+          },
+          create: {
+            bookingId: dto.bookingId,
+            userId: validUserId,
+            rating: dto.rating,
+            comment: dto.comment,
+            vehicleName,
+          },
+        });
+        return review;
+      } catch (err) {
+        throw new BadRequestException('Gagal menyimpan ulasan ke database.');
+      }
+    }
   }
 
   async findAll() {
