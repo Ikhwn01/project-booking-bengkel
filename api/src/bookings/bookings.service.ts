@@ -2,7 +2,8 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
-import { BookingStatus } from '../common/enums';
+import { BookingStatus, Role } from '../common/enums';
+import { globalMemoryUsers } from '../auth/auth.service';
 
 export const STANDARD_SLOTS = [
   '08:00',
@@ -20,6 +21,25 @@ const MAX_BAY_CAPACITY_PER_SLOT = 3;
 @Injectable()
 export class BookingsService {
   constructor(private prisma: PrismaService) {}
+
+  private async ensureUserExists(userId: string) {
+    try {
+      const userInDb = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (!userInDb) {
+        const memUser = globalMemoryUsers.get(userId);
+        await this.prisma.user.create({
+          data: {
+            id: userId,
+            name: memUser?.name || 'Customer',
+            email: memUser?.email || `user-${Date.now()}@bengkel.com`,
+            password: memUser?.password || '$2b$10$e7q9V/3J5/wQ.4hW.1010e.1010101010101010101010',
+            phone: memUser?.phone || '08123456789',
+            role: memUser?.role || Role.CUSTOMER,
+          },
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  }
 
   async checkAvailability(dateStr: string, mechanicId?: string) {
     const targetDate = new Date(dateStr);
@@ -62,6 +82,7 @@ export class BookingsService {
   }
 
   async create(userId: string, dto: CreateBookingDto) {
+    await this.ensureUserExists(userId);
     let vehicleId = dto.vehicleId;
 
     if (!vehicleId) {
