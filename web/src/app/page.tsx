@@ -53,6 +53,7 @@ export default function HomePage() {
       const res = await api.get('/reviews');
       return res.data;
     },
+    refetchInterval: 5000,
   });
 
   const defaultTestimonials = [
@@ -284,7 +285,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-white">{rev.user.name}</span>
+                  <span className="font-semibold text-white">{rev.user?.name || 'Pelanggan Bengkel'}</span>
                   <span className="text-slate-500 text-[11px] font-medium">{rev.vehicleName}</span>
                 </div>
               </div>

@@ -80,6 +80,10 @@ export class ReviewsService {
     dbReviews.forEach((r) => mergedMap.set(r.id, r));
     memReviews.forEach((r) => mergedMap.set(r.id, r));
 
-    return Array.from(mergedMap.values());
+    return Array.from(mergedMap.values()).map((r) => ({
+      ...r,
+      user: r.user || { name: 'Pelanggan Bengkel' },
+      vehicleName: r.vehicleName || 'Pemilik Kendaraan Servis',
+    }));
   }
 }
