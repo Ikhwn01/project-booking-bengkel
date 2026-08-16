@@ -30,7 +30,7 @@ const bookingSchema = z.object({
   serviceId: z.string().min(1, 'Layanan servis harus dipilih'),
   mechanicId: z.string().optional(),
   date: z.string().min(1, 'Tanggal servis harus dipilih'),
-  timeSlot: z.string().min(1, 'Jam slot harus dipilih'),
+  timeSlot: z.string().min(1, 'Jam slot ketersediaan harus dipilih'),
   notes: z.string().optional(),
 });
 
@@ -164,11 +164,37 @@ function BookingForm() {
     try {
       await api.post('/bookings', values);
       setSuccessMsg(t.bookingSuccess);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => {
         router.push('/riwayat');
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.message || t.bookingFailMsg);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!err.response) {
+        setErrorMsg('Gagal terhubung ke API. Periksa koneksi internet Anda.');
+        return;
+      }
+      const msg = err.response?.data?.message;
+      if (Array.isArray(msg)) {
+        setErrorMsg(msg.join(', '));
+      } else if (typeof msg === 'string') {
+        setErrorMsg(msg);
+      } else {
+        setErrorMsg(t.bookingFailMsg);
+      }
+    }
+  };
+
+  const onInvalidSubmit = (invalidErrors: any) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (invalidErrors.timeSlot) {
+      setErrorMsg('Harap klik salah satu Jam Slot Ketersediaan (08:00, 09:00, dst.)!');
+    } else if (invalidErrors.serviceId) {
+      setErrorMsg('Harap klik salah satu Paket Layanan Servis!');
+    } else if (invalidErrors.date) {
+      setErrorMsg('Harap pilih Tanggal Servis!');
+    } else {
+      setErrorMsg('Harap lengkapi semua formulir reservasi sebelum mengirim!');
     }
   };
 
@@ -185,20 +211,20 @@ function BookingForm() {
       </div>
 
       {errorMsg && (
-        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-3">
+        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-3 shadow-lg">
           <AlertCircle className="w-5 h-5 shrink-0" />
-          <span>{errorMsg}</span>
+          <span className="font-semibold">{errorMsg}</span>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-3">
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-3 shadow-lg">
           <CheckCircle className="w-5 h-5 shrink-0" />
-          <span>{successMsg}</span>
+          <span className="font-semibold">{successMsg}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-8">
         <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -232,7 +258,7 @@ function BookingForm() {
                     }}
                     className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                       isSelected
-                        ? 'bg-blue-600/20 border-blue-500 text-white'
+                        ? 'bg-blue-600/20 border-blue-500 text-white shadow-lg shadow-blue-500/10'
                         : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
                     }`}
                   >
@@ -291,10 +317,10 @@ function BookingForm() {
               return (
                 <div
                   key={s.id}
-                  onClick={() => setValue('serviceId', s.id)}
+                  onClick={() => setValue('serviceId', s.id, { shouldValidate: true })}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-blue-600/20 border-blue-500 text-white'
+                      ? 'bg-blue-600/20 border-blue-500 text-white shadow-lg shadow-blue-500/10'
                       : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
                   }`}
                 >
@@ -313,7 +339,7 @@ function BookingForm() {
             })}
           </div>
           {errors.serviceId && (
-            <p className="text-red-400 text-xs">{errors.serviceId.message}</p>
+            <p className="text-red-400 text-xs font-semibold">{errors.serviceId.message}</p>
           )}
         </div>
 
@@ -358,7 +384,7 @@ function BookingForm() {
           <div className="mt-6 pt-4 border-t border-slate-800/80">
             <div className="flex items-center justify-between mb-3">
               <label className="block text-xs font-semibold text-slate-300">
-                {t.bookingSlotHeader}
+                {t.bookingSlotHeader} <span className="text-red-400">*</span>
               </label>
               {isLoadingSlots && (
                 <span className="text-[11px] text-blue-400 animate-pulse">{t.bookingCheckingSlot}</span>
@@ -375,10 +401,10 @@ function BookingForm() {
                     key={slot.timeSlot}
                     type="button"
                     disabled={isDisabled}
-                    onClick={() => setValue('timeSlot', slot.timeSlot)}
+                    onClick={() => setValue('timeSlot', slot.timeSlot, { shouldValidate: true })}
                     className={`p-3 rounded-xl border text-xs font-medium flex flex-col items-center justify-center transition-all ${
                       isSelected
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30 font-bold scale-[1.02]'
                         : isDisabled
                         ? 'bg-slate-950/40 border-slate-900 text-slate-600 cursor-not-allowed line-through'
                         : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-blue-500/50 hover:text-white'
@@ -395,7 +421,7 @@ function BookingForm() {
               })}
             </div>
             {errors.timeSlot && (
-              <p className="text-red-400 text-xs mt-2">{errors.timeSlot.message}</p>
+              <p className="text-red-400 text-xs font-semibold mt-2">{errors.timeSlot.message}</p>
             )}
           </div>
         </div>
