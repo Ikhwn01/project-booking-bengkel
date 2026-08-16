@@ -1,10 +1,28 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 
-let serverHandler: any;
+let cachedServer: any;
+
+function setupVercelSQLite() {
+  if (process.env.VERCEL) {
+    try {
+      const tmpDbPath = '/tmp/dev.db';
+      const srcDbPath = path.join(process.cwd(), 'prisma', 'dev.db');
+      if (!fs.existsSync(tmpDbPath) && fs.existsSync(srcDbPath)) {
+        fs.copyFileSync(srcDbPath, tmpDbPath);
+      }
+      process.env.DATABASE_URL = 'file:/tmp/dev.db';
+    } catch (e) {
+      console.error('Vercel SQLite setup error:', e);
+    }
+  }
+}
 
 async function createServer() {
+  setupVercelSQLite();
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
@@ -26,13 +44,13 @@ async function createServer() {
 }
 
 export default async function handler(req: any, res: any) {
-  if (!serverHandler) {
-    serverHandler = await createServer();
+  if (!cachedServer) {
+    cachedServer = await createServer();
   }
-  return serverHandler(req, res);
+  return cachedServer(req, res);
 }
 
-if (process.env.NODE_ENV !== 'production') {
+if (!process.env.VERCEL) {
   async function bootstrap() {
     const app = await NestFactory.create(AppModule);
     app.enableCors({
